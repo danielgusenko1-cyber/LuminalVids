@@ -57,9 +57,9 @@ const cover = s => s.cover_url
   : esc((s.title || '?').trim().charAt(0));
 
 async function load() {
-  const url = SUPABASE_URL + '/rest/v1/series?select=*,episodes(*)&order=sort_order.asc,created_at.asc';
+  const url = SUPABASE_URL + '/rest/v1/series?select=*,episodes(*)&order=sort_order.asc,created_at.asc&apikey=' + SUPABASE_KEY;
   const r = await fetch(url, { headers: { apikey: SUPABASE_KEY } });
-  if (!r.ok) throw new Error('код ' + r.status);
+  if (!r.ok) throw new Error('код ' + r.status + ', адрес: ' + SUPABASE_URL);
   catalog = await r.json();
 }
 
