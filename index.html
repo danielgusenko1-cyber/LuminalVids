@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Сериалы</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:var(--tg-theme-bg-color,#0e0f13);
+  --tx:var(--tg-theme-text-color,#f1f1f4);
+  --hint:var(--tg-theme-hint-color,#8d8f99);
+  --card:var(--tg-theme-secondary-bg-color,#181a21);
+  --accent:#d99a2b;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px 16px calc(32px + env(safe-area-inset-bottom,0px))}
+h1{font-size:24px;line-height:1.2;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.card{cursor:pointer}
+.cover{aspect-ratio:2/3;border-radius:10px;overflow:hidden;background:linear-gradient(160deg,#2a2d3a,#14151b);display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;color:var(--accent)}
+.cover img{width:100%;height:100%;object-fit:cover;display:block}
+.card .t{margin-top:8px;font-size:15px;font-weight:600;line-height:1.25}
+.hero{display:flex;gap:14px;margin-bottom:8px}
+.hero .cover{width:112px;flex:none;font-size:38px}
+.hero h1{margin:0}
+.hero p{color:var(--hint);font-size:14px;line-height:1.45;margin-top:8px}
+h2{font-size:14px;font-weight:600;color:var(--hint);margin:20px 0 8px}
+.ep{display:flex;align-items:center;gap:14px;background:var(--card);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer}
+.ep b{flex:none;min-width:28px;font-size:20px;color:var(--accent);text-align:center}
+.ep span{font-size:15px;line-height:1.3}
+.msg{color:var(--hint);text-align:center;padding:48px 0;font-size:15px}
+@media (min-width:600px){.grid{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ===== НАСТРОЙКИ: вставь свои значения из Supabase =====
+// Project Settings -> API Keys: Project URL и publishable (anon) key.
+// Секретный ключ (secret / service_role) сюда вставлять НЕЛЬЗЯ.
+const SUPABASE_URL = 'https://tribbrvsmhoszvkufyto.supabase.co/rest/v1/';
+const SUPABASE_KEY = 'sb_publishable_ZxQon289CF6Zjao_h-Prnw_BlfCrMyZ';
+// =======================================================
+
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+const app = document.getElementById('app');
+let catalog = [];
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const cover = s => s.cover_url
+  ? '<img src="' + esc(s.cover_url) + '" alt="">'
+  : esc((s.title || '?').trim().charAt(0));
+
+async function load() {
+  const url = SUPABASE_URL + '/rest/v1/series?select=*,episodes(*)&order=sort_order.asc,created_at.asc';
+  const r = await fetch(url, { headers: { apikey: SUPABASE_KEY } });
+  if (!r.ok) throw new Error('код ' + r.status);
+  catalog = await r.json();
+}
+
+function showCatalog() {
+  if (tg) tg.BackButton.hide();
+  app.innerHTML = '<h1>Сериалы</h1>' + (catalog.length
+    ? '<div class="grid">' + catalog.map((s, i) =>
+        '<div class="card" data-i="' + i + '"><div class="cover">' + cover(s) +
+        '</div><div class="t">' + esc(s.title) + '</div></div>').join('') + '</div>'
+    : '<div class="msg">Пока здесь пусто</div>');
+  app.querySelectorAll('.card').forEach(el => {
+    el.onclick = () => showSeries(catalog[el.dataset.i]);
+  });
+  window.scrollTo(0, 0);
+}
+
+function showSeries(s) {
+  if (tg) tg.BackButton.show();
+  const eps = (s.episodes || []).slice().sort((a, b) => a.season - b.season || a.number - b.number);
+  const seasons = Array.from(new Set(eps.map(e => e.season)));
+  let h = '<div class="hero"><div class="cover">' + cover(s) + '</div><div><h1>' +
+    esc(s.title) + '</h1><p>' + esc(s.description) + '</p></div></div>';
+  if (!eps.length) h += '<div class="msg">Серии скоро появятся</div>';
+  seasons.forEach(n => {
+    if (seasons.length > 1) h += '<h2>Сезон ' + n + '</h2>';
+    h += eps.filter(e => e.season === n).map(e =>
+      '<div class="ep" data-id="' + esc(e.id) + '"><b>' + e.number + '</b><span>' +
+      esc(e.title || 'Серия ' + e.number) + '</span></div>').join('');
+  });
+  app.innerHTML = h;
+  app.querySelectorAll('.ep').forEach(el => {
+    el.onclick = () => play(eps.find(e => e.id === el.dataset.id));
+  });
+  window.scrollTo(0, 0);
+}
+
+function play(e) {
+  const u = e.video_url;
+  if (tg) {
+    if (/^https:\/\/t\.me\//.test(u)) tg.openTelegramLink(u);
+    else tg.openLink(u);
+  } else {
+    window.open(u, '_blank');
+  }
+}
+
+if (tg) tg.BackButton.onClick(showCatalog);
+
+(async () => {
+  app.innerHTML = '<div class="msg">Загрузка…</div>';
+  try { await load(); }
+  catch (err) {
+    app.innerHTML = '<div class="msg">Не удалось загрузить каталог (' + esc(err.message) + ')</div>';
+    return;
+  }
+  // Ссылка вида t.me/бот/приложение?startapp=last-frame сразу открывает сериал
+  const slug = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+  const s = slug && catalog.find(x => x.slug === slug);
+  if (s) showSeries(s); else showCatalog();
+})();
+</script>
+</body>
+</html>
